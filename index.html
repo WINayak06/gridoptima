@@ -436,15 +436,15 @@ document.getElementById('apiForm').addEventListener('submit', async (e) => {
   }
 
   try {
-    await fetch('http://localhost:5000/solve', { method: 'POST', body: fd });
+    await fetch('https://gridoptima-3.onrender.com/solve', { method: 'POST', body: fd });
     const poll = setInterval(async () => {
-      const res = await fetch('http://localhost:5000/status');
+      const res = await fetch('https://gridoptima-3.onrender.com/status');
       const data = await res.json();
       if(data.logs.length > 0) stat.innerText = "> " + data.logs[data.logs.length-1];
       
       if(data.status === "done") {
         clearInterval(poll);
-        const resData = await fetch('http://localhost:5000/result');
+        const resData = await fetch('https://gridoptima-3.onrender.com/result');
         R = await resData.json();
         
         document.getElementById('upload-screen').style.display = 'none';
