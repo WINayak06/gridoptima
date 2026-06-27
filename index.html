@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unified Grid EMS Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+/* ── Reset & base ─────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:       #f0f2f5;
+  --surface:  #ffffff;
+  --surface2: #f7f8fa;
+  --border:   rgba(0,0,0,0.08);
+  --text:     #111318;
+  --muted:    #5c6070;
+  --hint:     #9aa0b0;
+  --blue:     #1d4ed8;
+  --blue2:    #3b82f6;
+  --blue-lt:  #eff6ff;
+  --green:    #065f46;
+  --green2:   #10b981;
+  --green-lt: #ecfdf5;
+  --amber:    #92400e;
+  --amber2:   #f59e0b;
+  --amber-lt: #fffbeb;
+  --red:      #991b1b;
+  --red2:     #ef4444;
+  --red-lt:   #fef2f2;
+  --mono:     'JetBrains Mono', 'Fira Code', monospace;
+  --r-sm:     6px;
+  --r-md:     10px;
+  --r-lg:     14px;
+  --shadow:   0 1px 4px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04);
+}
+
+body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 13.5px; line-height: 1.55; min-height: 100vh; }
+
+/* ── Auth Overlay ────────────────────────────────────────────────── */
+#authOverlay { position:fixed; inset:0; background:rgba(15,23,42,0.98); backdrop-filter:blur(10px); display:flex; justify-content:center; align-items:center; z-index:9999; }
+.auth-box { background:#1e293b; padding:40px; border-radius:12px; width:380px; border:1px solid rgba(255,255,255,0.1); box-shadow:0 20px 40px rgba(0,0,0,0.5); color:white; }
+.auth-input { width:100%; padding:12px; margin-bottom:15px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.2); border-radius:6px; color:white; outline:none; font-family:var(--mono); font-size:12px;}
+.auth-btn { width:100%; padding:12px; background:var(--blue2); color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer; }
+.auth-alert { display:none; padding:10px; border-radius:6px; background:#ef444433; border:1px solid #ef4444; color:#fca5a5; font-size:12px; margin-bottom:15px; text-align:center; }
+
+/* ── Upload screen ───────────────────────────────────────────────── */
+#upload-screen { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; background: linear-gradient(145deg, #0f172a 0%, #1e3a5f 100%); }
+.brand { display: flex; align-items: center; gap: 12px; margin-bottom: 40px; }
+.brand-icon { width: 44px; height: 44px; border-radius: 10px; background: var(--blue2); display: flex; align-items: center; justify-content: center; }
+.brand-icon svg { width: 24px; height: 24px; }
+.brand-name { font-size: 20px; font-weight: 700; color: #fff; letter-spacing: -.3px; }
+.brand-sub  { font-size: 12px; color: rgba(255,255,255,.5); margin-top: 1px; }
+
+.file-form { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: var(--r-lg); padding: 32px; width: min(480px, 100%); display: flex; flex-direction: column; gap: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+.toggle-box { display: flex; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 4px; margin-bottom: 5px; gap: 2px;}
+.toggle-btn { flex: 1; padding: 10px 5px; border: none; background: transparent; color: rgba(255,255,255,0.5); cursor: pointer; border-radius: 6px; font-weight: bold; font-size: 11px; transition: 0.3s; text-align: center;}
+.toggle-btn.active { background: var(--blue2); color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.2);}
+
+.file-row { display: flex; flex-direction: column; text-align: left; }
+.file-row label { font-size: 12px; font-weight: 600; color: rgba(255,255,255,.8); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;}
+.file-row input { background: rgba(0,0,0,.2); border: 1px solid rgba(255,255,255,.15); padding: 10px; border-radius: 6px; color: #fff; font-size: 12px; cursor: pointer;}
+.file-row input:focus { outline: none; border-color: var(--blue2); }
+
+.run-btn { margin-top: 8px; background: var(--blue2); color: #fff; border: none; padding: 14px; border-radius: 6px; font-weight: 600; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; transition: 0.2s; }
+.run-btn:hover { background: #2563eb; }
+.run-btn:disabled { background: var(--muted); cursor: not-allowed; color: #9aa0b0;}
+
+.status-log { margin-top: 16px; font-family: var(--mono); font-size: 12px; color: var(--green2); min-height: 20px; text-align: center; }
+
+/* ── Dashboard ───────────────────────────────────────────────────── */
+#dashboard { display: none; }
+.hdr { background: #0f172a; border-bottom: 1px solid rgba(255,255,255,.07); padding: 0 28px; display: flex; align-items: center; justify-content: space-between; height: 56px; position: sticky; top: 0; z-index: 200; }
+.hdr-brand { display: flex; align-items: center; gap: 10px; }
+.hdr-brand svg { width: 20px; height: 20px; color: var(--blue2); }
+.hdr-title { font-size: 14px; font-weight: 600; color: #fff; }
+.hdr-meta  { font-size: 11px; color: rgba(255,255,255,.35); }
+
+.nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 28px; display: flex; gap: 2px; position: sticky; top: 56px; z-index: 199; }
+.nav-btn { background: none; border: none; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--muted); padding: 13px 16px; border-bottom: 2px solid transparent; transition: color .15s, border-color .15s; white-space: nowrap; display: none; }
+.nav-btn.visible { display: block; }
+.nav-btn:hover { color: var(--text); }
+.nav-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+
+.main { max-width: 1400px; margin: 0 auto; padding: 24px 28px; }
+.tab  { display: none; }
+.tab.active { display: block; }
+
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: 16px 18px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
+.metric::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
+.metric.blue::before  { background: var(--blue2); }
+.metric.green::before { background: var(--green2); }
+.metric.amber::before { background: var(--amber2); }
+.metric.red::before   { background: var(--red2); }
+.metric.grey::before  { background: var(--hint); }
+.metric-lbl { font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; }
+.metric-val { font-size: 22px; font-weight: 700; letter-spacing: -.5px; color: var(--text); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.metric-sub { font-size: 11px; color: var(--hint); margin-top: 4px; }
+
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: 18px 22px; box-shadow: var(--shadow); margin-bottom: 14px;}
+.panel-title { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; }
+.g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+
+.legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+.leg-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+.leg-swatch { width: 10px; height: 10px; border-radius: 2px; }
+
+.tbl-wrap { overflow-x: auto; max-height: 400px; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { padding: 8px 12px; font-size: 10.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; border-bottom: 1px solid var(--border); background: var(--surface2); white-space: nowrap; text-align: left; position: sticky; top: 0; z-index: 10; }
+td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--surface2); }
+.num { font-family: var(--mono); text-align: right; }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10.5px; font-weight: 600; }
+.badge-green { background: var(--green-lt); color: var(--green); }
+.badge-red   { background: var(--red-lt);   color: var(--red);   }
+.badge-amber { background: var(--amber-lt); color: var(--amber); }
+
+.heatmap-scroll { overflow-x: auto; }
+.pos-high { color: #991b1b; font-weight: 600; }
+.pos-low  { color: #92400e; }
+.neg      { color: #065f46; }
+
+/* Tooltip for Heatmap */
+#heatmap-tooltip { position: fixed; background: rgba(0, 0, 0, 0.85); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 11.5px; font-family: var(--mono); pointer-events: none; opacity: 0; transition: opacity 0.15s ease; z-index: 9999; transform: translate(-50%, -120%); text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+#heatmap-tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: rgba(0, 0, 0, 0.85) transparent transparent transparent; }
+</style>
+</head>
+<body>
+
+<div id="heatmap-tooltip"></div>
+
+<div id="authOverlay">
+  <div class="auth-box">
+    <h2 id="authTitle" style="margin-bottom:20px; font-family:system-ui; font-size:22px;">Engineer Login</h2>
+    <div id="authAlert" class="auth-alert"></div>
+    
+    <div id="form-login">
+      <input type="email" id="loginEmail" class="auth-input" placeholder="Email Address">
+      <input type="password" id="loginPass" class="auth-input" placeholder="Password">
+      <label style="font-size:12px; display:flex; align-items:center; gap:8px; margin-bottom:20px; cursor:pointer;">
+        <input type="checkbox" id="rememberMe"> Remember my session
+      </label>
+      <button onclick="doLogin()" class="auth-btn">Sign In</button>
+      <div style="text-align:center; margin-top:15px; font-size:12px; color:var(--hint);">New here? <span onclick="switchAuth('register')" style="color:var(--blue2); cursor:pointer;">Register with OTP</span></div>
+    </div>
+
+    <div id="form-register" style="display:none;">
+      <input type="email" id="regEmail" class="auth-input" placeholder="Enter Email for OTP">
+      <button onclick="requestOTP()" id="btn-req-otp" class="auth-btn" style="background:var(--green2)">Send Verification OTP</button>
+      <div style="text-align:center; margin-top:15px; font-size:12px; color:var(--hint);">Have an account? <span onclick="switchAuth('login')" style="color:var(--blue2); cursor:pointer;">Sign In</span></div>
+    </div>
+
+    <div id="form-verify" style="display:none;">
+      <p style="font-size:11px; color:var(--hint); margin-bottom:15px; text-align:center;">Check your email/terminal for the 6-digit code.</p>
+      <input type="text" id="verifyOtp" class="auth-input" placeholder="000000" style="text-align:center; letter-spacing:4px; font-size:16px;">
+      <input type="password" id="regPass" class="auth-input" placeholder="Set Secure Password">
+      <button onclick="submitOTP()" class="auth-btn">Verify & Create Account</button>
+    </div>
+  </div>
+</div>
+
+<div id="upload-screen" style="display:none;">
+  <div class="brand">
+    <div class="brand-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><polyline points="2,17 7,9 12,13 17,5 22,8"/><circle cx="22" cy="8" r="1.5" fill="white" stroke="none"/></svg>
+    </div>
+    <div>
+      <div class="brand-name">GridOptima Unified Suite</div>
+      <div class="brand-sub">MILP / PTDF EMS Architecture</div>
+    </div>
+  </div>
+
+  <form id="apiForm" class="file-form">
+    <div class="toggle-box">
+      <button type="button" id="btn-ed" class="toggle-btn active" onclick="setMode('ed')">ED (1Hr)</button>
+      <button type="button" id="btn-dcopf" class="toggle-btn" onclick="setMode('dcopf')">DC-OPF (1Hr)</button>
+      <button type="button" id="btn-educ" class="toggle-btn" onclick="setMode('educ')">ED-UC (24Hr)</button>
+      <button type="button" id="btn-scuc" class="toggle-btn" onclick="setMode('scuc')">SCUC (24Hr)</button>
+    </div>
+    <div class="file-row">
+      <label>Generators (.csv)</label>
+      <input type="file" id="genFile" accept=".csv" required>
+    </div>
+    <div class="file-row">
+      <label>Bus Demand (.csv)</label>
+      <input type="file" id="busFile" accept=".csv" required>
+    </div>
+    <div class="file-row" id="lineFileRow" style="display:none;">
+      <label>Transmission Lines (.csv)</label>
+      <input type="file" id="lineFile" accept=".csv">
+    </div>
+    <button type="submit" id="run-btn" class="run-btn">Execute Engine</button>
+    <div id="status-text" class="status-log"></div>
+  </form>
+</div>
+
+<div id="dashboard">
+  <header class="hdr">
+    <div class="hdr-brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="2,17 7,9 12,13 17,5 22,8"/></svg>
+      <span class="hdr-title" id="dash-main-title">EMS Dashboard</span>
+    </div>
+    <div class="hdr-meta" id="hdr-meta"></div>
+  </header>
+
+  <nav class="nav">
+    <button class="nav-btn" id="nav-ed" onclick="showTab('tab-ed',this)">Economic Dispatch</button>
+    <button class="nav-btn" id="nav-dcopf" onclick="showTab('tab-dcopf',this)">DC-OPF</button>
+    <button class="nav-btn" id="nav-educ" onclick="showTab('tab-educ',this)">ED-UC (24Hr)</button>
+    <button class="nav-btn" id="nav-scuc" onclick="showTab('tab-scuc',this)">SCUC (24Hr)</button>
+    <button class="nav-btn" id="nav-compare" onclick="showTab('tab-compare',this)">Comparison</button>
+    <button class="nav-btn" id="nav-network" onclick="showTab('tab-network',this)">Network</button>
+  </nav>
+
+  <div class="main">
+
+    <div id="tab-ed" class="tab">
+      <div class="metrics" id="stat-ed-metrics"></div>
+      <div class="g2 mb">
+        <div class="panel">
+          <div class="panel-title">Generator Dispatch (MW)</div>
+          <div style="position:relative;height:250px"><canvas id="ch-ed-dispatch"></canvas></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Generator Operational Costs ($)</div>
+          <div style="position:relative;height:250px"><canvas id="ch-ed-cost"></canvas></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Economic Dispatch Ledger</div>
+        <div class="tbl-wrap"><table id="tbl-stat-ed"></table></div>
+      </div>
+    </div>
+    
+    <div id="tab-dcopf" class="tab">
+      <div class="metrics" id="stat-dc-metrics"></div>
+      <div class="g2 mb">
+        <div class="panel">
+          <div class="panel-title">Transmission Line Loading (%)</div>
+          <div style="position:relative;height:250px"><canvas id="ch-dcopf-lines"></canvas></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Generator Cleared Output (MW)</div>
+          <div style="position:relative;height:250px"><canvas id="ch-dcopf-gens"></canvas></div>
+        </div>
+      </div>
+      <div class="g2 mb">
+        <div class="panel">
+          <div class="panel-title">Network Branch Flux Ledger</div>
+          <div class="tbl-wrap"><table id="tbl-stat-dc"></table></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Generation Resource Ledger</div>
+          <div class="tbl-wrap"><table id="tbl-stat-dc-gens"></table></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-educ" class="tab">
+      <div class="metrics" id="educ-metrics"></div>
+      <div class="g2 mb">
+        <div class="panel"><div class="panel-title">Units online &amp; marginal cost</div>
+          <div class="legend"><div class="leg-item"><span class="leg-swatch" style="background:#10b981"></span>Units ON</div><div class="leg-item"><span class="leg-swatch" style="background:#f59e0b"></span>λ $/MWh</div></div>
+          <div style="position:relative;height:190px"><canvas id="ch-educ-on"></canvas></div>
+        </div>
+        <div class="panel"><div class="panel-title">Hourly dispatch by generator (MW)</div><div style="position:relative;height:190px"><canvas id="ch-educ-stack"></canvas></div></div>
+      </div>
+      <div class="panel mb"><div class="panel-title">Energy dispatched per generator (MWh)</div><div style="position:relative;height:300px"><canvas id="ch-educ-mwh"></canvas></div></div>
+      <div class="panel mb"><div class="panel-title">Commitment schedule <span style="font-weight:400;color:var(--hint)">(green = ON)</span></div><div class="heatmap-scroll" id="hm-educ"></div></div>
+    </div>
+
+    <div id="tab-scuc" class="tab">
+      <div class="metrics" id="scuc-metrics"></div>
+      <div class="g2 mb">
+        <div class="panel"><div class="panel-title">Units online &amp; marginal cost</div>
+          <div class="legend"><div class="leg-item"><span class="leg-swatch" style="background:#3b82f6"></span>Units ON</div><div class="leg-item"><span class="leg-swatch" style="background:#f59e0b"></span>λ $/MWh</div></div>
+          <div style="position:relative;height:190px"><canvas id="ch-scuc-on"></canvas></div>
+        </div>
+        <div class="panel"><div class="panel-title">Hourly dispatch by generator (MW)</div><div style="position:relative;height:190px"><canvas id="ch-scuc-stack"></canvas></div></div>
+      </div>
+      <div class="panel mb"><div class="panel-title">Energy dispatched per generator (MWh)</div><div style="position:relative;height:300px"><canvas id="ch-scuc-mwh"></canvas></div></div>
+      <div class="panel mb"><div class="panel-title">Commitment schedule <span style="font-weight:400;color:var(--hint)">(blue = ON)</span></div><div class="heatmap-scroll" id="hm-scuc"></div></div>
+    </div>
+
+    <div id="tab-compare" class="tab">
+      <div class="panel mb"><div class="panel-title">Hourly System Demand (MW)</div><div style="position:relative;height:200px"><canvas id="ch-demand"></canvas></div></div>
+      <div class="g2 mb">
+        <div class="panel"><div class="panel-title">Hourly cost — ED-UC vs SCUC</div>
+          <div class="legend"><div class="leg-item"><span class="leg-swatch" style="background:#10b981"></span>ED-UC</div><div class="leg-item"><span class="leg-swatch" style="background:#3b82f6"></span>SCUC</div></div>
+          <div style="position:relative;height:200px"><canvas id="ch-hcost"></canvas></div>
+        </div>
+        <div class="panel"><div class="panel-title">Generators online per hour</div>
+          <div class="legend"><div class="leg-item"><span class="leg-swatch" style="background:#10b981"></span>ED-UC</div><div class="leg-item"><span class="leg-swatch" style="background:#3b82f6"></span>SCUC</div></div>
+          <div style="position:relative;height:200px"><canvas id="ch-on-cmp"></canvas></div>
+        </div>
+      </div>
+      <div class="panel mb"><div class="panel-title">Security cost premium per hour (SCUC − ED-UC, $)</div><div style="position:relative;height:150px"><canvas id="ch-delta"></canvas></div></div>
+      <div class="panel mb"><div class="panel-title">Generator dispatch difference: SCUC − ED-UC (MWh)</div><div style="position:relative;height:300px"><canvas id="ch-gen-cmp"></canvas></div></div>
+    </div>
+
+    <div id="tab-network" class="tab">
+      <div class="metrics" id="net-metrics"></div>
+      <div class="g2 mb">
+        <div class="panel"><div class="panel-title">Line loading distribution (% of rating)</div><div style="position:relative;height:220px"><canvas id="ch-load-hist"></canvas></div></div>
+        <div class="panel"><div class="panel-title">Top 20 most loaded lines</div><div style="position:relative;height:220px"><canvas id="ch-top-lines"></canvas></div></div>
+      </div>
+      <div class="panel"><div class="panel-title">Congested &amp; heavily loaded lines (≥ 80%)</div><div class="tbl-wrap"><table id="tbl-lines"></table></div></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════
+//  AUTH LOGIC & REMEMBER ME
+// ══════════════════════════════════════════════════════════════════════
+window.onload = () => {
+  const savedUser = localStorage.getItem('grid_session');
+  if (savedUser) {
+    document.getElementById('authOverlay').style.display = 'none';
+    document.getElementById('upload-screen').style.display = 'flex';
+  }
+};
+
+function showAlert(msg) {
+  const box = document.getElementById('authAlert');
+  box.innerText = msg; box.style.display = 'block';
+}
+
+function switchAuth(mode) {
+  document.getElementById('authAlert').style.display = 'none';
+  ['login','register','verify'].forEach(m => document.getElementById('form-'+m).style.display = m===mode ? 'block' : 'none');
+  document.getElementById('authTitle').innerText = mode==='login'?'Engineer Login':mode==='register'?'System Registration':'Verify Identity';
+}
+
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPass').value;
+  const remember = document.getElementById('rememberMe').checked;
+  if(!email || !password) return showAlert("Fill all fields.");
+
+  const res = await fetch('http://127.0.0.1:5000/auth/login', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, password}) });
+  if (res.ok) {
+    if(remember) localStorage.setItem('grid_session', email);
+    document.getElementById('authOverlay').style.display = 'none';
+    document.getElementById('upload-screen').style.display = 'flex';
+  } else { const data = await res.json(); showAlert(data.error); }
+}
+
+async function requestOTP() {
+  const email = document.getElementById('regEmail').value.trim();
+  if(!email) return showAlert("Provide email.");
+  document.getElementById('btn-req-otp').innerText = "Sending...";
+  const res = await fetch('http://127.0.0.1:5000/auth/request-otp', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email}) });
+  if (res.ok) switchAuth('verify');
+  else { const data = await res.json(); showAlert(data.error); document.getElementById('btn-req-otp').innerText = "Send Verification OTP"; }
+}
+
+async function submitOTP() {
+  const email = document.getElementById('regEmail').value.trim();
+  const otp = document.getElementById('verifyOtp').value.trim();
+  const password = document.getElementById('regPass').value;
+  if(!otp || !password) return showAlert("Fill all fields.");
+
+  const res = await fetch('http://127.0.0.1:5000/auth/verify', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, otp, password}) });
+  if (res.ok) {
+    localStorage.setItem('grid_session', email);
+    document.getElementById('authOverlay').style.display = 'none';
+    document.getElementById('upload-screen').style.display = 'flex';
+  } else { const data = await res.json(); showAlert(data.error); }
+}
+
+let R = null;
+let currentMode = 'ed'; // Default mode
+const GC = 'rgba(0,0,0,0.06)', TC = '#9aa0b0';
+const fmt$ = v => '$' + Math.round(v).toLocaleString();
+const PALETTE = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#84cc16','#ec4899','#14b8a6','#6366f1','#f43f5e','#22c55e','#eab308','#0ea5e9'];
+
+// Initialize default state
+document.getElementById('lineFileRow').style.display = 'none';
+document.getElementById('lineFile').required = false;
+
+function setMode(mode) {
+  currentMode = mode;
+  ['ed', 'dcopf', 'educ', 'scuc'].forEach(m => document.getElementById('btn-'+m).classList.toggle('active', mode === m));
+  
+  const lineRow = document.getElementById('lineFileRow');
+  const lineInput = document.getElementById('lineFile');
+  
+  // Hide Transmission Line input for ED and ED-UC modes
+  if (mode === 'ed' || mode === 'educ') {
+    lineRow.style.display = 'none';
+    lineInput.required = false;
+  } else {
+    lineRow.style.display = 'flex';
+    lineInput.required = true;
+  }
+}
+
+function showTab(id, btn) {
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+}
+
+document.getElementById('apiForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('run-btn');
+  const stat = document.getElementById('status-text');
+  btn.disabled = true; stat.innerText = "Connecting to Engine...";
+
+  const fd = new FormData();
+  // Map our 4 frontend modes to the 2 backend suite_types
+  if(currentMode === 'ed' || currentMode === 'dcopf') {
+    fd.append('suite_type', 'static');
+  } else {
+    fd.append('suite_type', 'uc');
+  }
+
+  // Send the logged-in user's email to the backend to receive the results report
+  const activeUser = localStorage.getItem('grid_session') || '';
+  fd.append('user_email', activeUser);
+
+  fd.append('gen_file', document.getElementById('genFile').files[0]);
+  fd.append('bus_file', document.getElementById('busFile').files[0]);
+  
+  if (currentMode === 'dcopf' || currentMode === 'scuc') {
+      if(document.getElementById('lineFile').files.length > 0) {
+          fd.append('line_file', document.getElementById('lineFile').files[0]);
+      }
+  }
+
+  try {
+    await fetch('http://localhost:5000/solve', { method: 'POST', body: fd });
+    const poll = setInterval(async () => {
+      const res = await fetch('http://localhost:5000/status');
+      const data = await res.json();
+      if(data.logs.length > 0) stat.innerText = "> " + data.logs[data.logs.length-1];
+      
+      if(data.status === "done") {
+        clearInterval(poll);
+        const resData = await fetch('http://localhost:5000/result');
+        R = await resData.json();
+        
+        document.getElementById('upload-screen').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'block';
+        buildDashboard();
+      } else if (data.status === "error") {
+        clearInterval(poll); alert("Error: " + data.error); btn.disabled = false;
+      }
+    }, 1000);
+  } catch (err) { alert(err); btn.disabled = false; }
+});
+
+function metricHTML(lbl, val, sub, accent) {
+  return `<div class="metric ${accent}"><div class="metric-lbl">${lbl}</div><div class="metric-val">${val}</div><div class="metric-sub">${sub}</div></div>`;
+}
+
+function baseOpts(yLabel, y2Label) {
+  return { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+    scales: { x: { grid: { color: GC }, ticks: { color: TC, font: { size: 10 } } }, y: { grid: { color: GC }, ticks: { color: TC, font: { size: 10 } }, title: yLabel ? { display: true, text: yLabel, color: TC, font:{size:10} } : { display: false } },
+      ...(y2Label ? { y2: { position: 'right', grid: { display: false }, ticks: { color: TC, font: { size: 10 } }, title: { display: true, text: y2Label, color: TC, font:{size:10} } } } : {}) } };
+}
+
+function buildHeatmap(containerId, generators, color) {
+  const N_G = generators.length, N_T = generators[0].commitment.length;
+  const cs = Math.max(12, Math.min(18, Math.floor(560 / N_T))), labelW = 44;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('width', labelW + N_T * cs + 4); svg.setAttribute('height', N_G * cs + 20);
+
+  for (let h = 0; h < N_T; h++) {
+    const tx = document.createElementNS('http://www.w3.org/2000/svg','text');
+    tx.setAttribute('x', labelW + h*cs + cs/2); tx.setAttribute('y', 9); tx.setAttribute('text-anchor','middle'); tx.setAttribute('font-size','8'); tx.setAttribute('fill', TC); tx.textContent = h+1;
+    svg.appendChild(tx);
+  }
+  for (let g = 0; g < N_G; g++) {
+    const tx = document.createElementNS('http://www.w3.org/2000/svg','text');
+    tx.setAttribute('x', labelW - 4); tx.setAttribute('y', 20 + g*cs + cs*0.72); tx.setAttribute('text-anchor','end'); tx.setAttribute('font-size','9'); tx.setAttribute('fill', TC); tx.textContent = generators[g].name;
+    svg.appendChild(tx);
+    for (let h = 0; h < N_T; h++) {
+      const r = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      r.setAttribute('x', labelW + h*cs); r.setAttribute('y', 20 + g*cs); r.setAttribute('width', cs-1); r.setAttribute('height', cs-1); r.setAttribute('rx','2');
+      const on = generators[g].commitment[h] === 1;
+      r.setAttribute('fill', on ? color : '#eef0f3');
+      r.setAttribute('data-tip', `${generators[g].name} | Hour ${h+1}<br/><span style="color:${on ? '#10b981' : '#ef4444'}">${on ? generators[g].dispatch[h].toFixed(1)+' MW' : 'OFFLINE'}</span>`);
+      svg.appendChild(r);
+    }
+  }
+  document.getElementById(containerId).innerHTML = ''; document.getElementById(containerId).appendChild(svg);
+  const tooltip = document.getElementById('heatmap-tooltip');
+  svg.addEventListener('mousemove', e => { if (e.target.tagName === 'rect' && e.target.hasAttribute('data-tip')) { tooltip.innerHTML = e.target.getAttribute('data-tip'); tooltip.style.left = e.clientX + 'px'; tooltip.style.top = e.clientY + 'px'; tooltip.style.opacity = 1; } else tooltip.style.opacity = 0; });
+  svg.addEventListener('mouseleave', () => tooltip.style.opacity = 0);
+}
+
+function buildDashboard() {
+  Object.values(Chart.instances).forEach(c => c.destroy());
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('visible'));
+
+  if (currentMode === 'ed') {
+    document.getElementById('dash-main-title').innerText = "Economic Dispatch (1Hr)";
+    document.getElementById('nav-ed').classList.add('visible');
+    showTab('tab-ed', document.getElementById('nav-ed'));
+
+    if (R.ed) {
+      document.getElementById('stat-ed-metrics').innerHTML = metricHTML('ED Cost', fmt$(R.ed.total_cost), `Solved in ${R.ed.solve_time_s}s`, 'green') + metricHTML('Market Clearing Price', fmt$(R.ed.mcp) + '/MWh', `System marginal price`, 'amber') + metricHTML('Total Demand', R.ed.total_demand + ' MW', `Base load met`, 'blue');
+      
+      // ED Charts
+      const labels = R.ed.generators.map(g => `G${g.id}`);
+      new Chart(document.getElementById('ch-ed-dispatch'), { type: 'bar', data: { labels: labels, datasets: [{ data: R.ed.generators.map(g=>g.dispatch), backgroundColor: '#10b981', borderRadius: 3 }] }, options: baseOpts('MW') });
+      new Chart(document.getElementById('ch-ed-cost'), { type: 'bar', data: { labels: labels, datasets: [{ data: R.ed.generators.map(g=>g.cost), backgroundColor: '#f59e0b', borderRadius: 3 }] }, options: baseOpts('$') });
+
+      let tEd = `<thead><tr><th>Generator ID</th><th class="num">Dispatch (MW)</th><th class="num">Cost ($)</th><th>Status</th></tr></thead><tbody>`;
+      R.ed.generators.forEach(g => { tEd += `<tr><td>G${g.id}</td><td class="num font-bold text-green-600">${g.dispatch}</td><td class="num">$${g.cost}</td><td>${g.marginal?'<span class="badge badge-amber">MARGINAL</span>':'<span class="badge badge-green">BASELOAD</span>'}</td></tr>`; });
+      document.getElementById('tbl-stat-ed').innerHTML = tEd + `</tbody>`;
+    }
+  } 
+  
+  else if (currentMode === 'dcopf') {
+    document.getElementById('dash-main-title').innerText = "DC-OPF Dispatch (1Hr)";
+    document.getElementById('nav-ed').classList.add('visible');
+    document.getElementById('nav-dcopf').classList.add('visible');
+    showTab('tab-dcopf', document.getElementById('nav-dcopf'));
+
+    // Render ED as fallback view too
+    if (R.ed) {
+      document.getElementById('stat-ed-metrics').innerHTML = metricHTML('ED Cost', fmt$(R.ed.total_cost), `Unconstrained cost`, 'green') + metricHTML('MCP', fmt$(R.ed.mcp) + '/MWh', `System marginal price`, 'amber');
+      const labels = R.ed.generators.map(g => `G${g.id}`);
+      new Chart(document.getElementById('ch-ed-dispatch'), { type: 'bar', data: { labels: labels, datasets: [{ data: R.ed.generators.map(g=>g.dispatch), backgroundColor: '#10b981', borderRadius: 3 }] }, options: baseOpts('MW') });
+      new Chart(document.getElementById('ch-ed-cost'), { type: 'bar', data: { labels: labels, datasets: [{ data: R.ed.generators.map(g=>g.cost), backgroundColor: '#f59e0b', borderRadius: 3 }] }, options: baseOpts('$') });
+      let tEd = `<thead><tr><th>Gen ID</th><th class="num">Dispatch (MW)</th><th class="num">Cost ($)</th><th>Status</th></tr></thead><tbody>`;
+      R.ed.generators.forEach(g => { tEd += `<tr><td>G${g.id}</td><td class="num text-green-600">${g.dispatch}</td><td class="num">${g.cost}</td><td>${g.marginal?'MARGINAL':'--'}</td></tr>`; });
+      document.getElementById('tbl-stat-ed').innerHTML = tEd + `</tbody>`;
+    }
+
+    if (R.dcopf) {
+      document.getElementById('stat-dc-metrics').innerHTML = metricHTML('DC-OPF Cost', fmt$(R.dcopf.total_cost), `Solved in ${R.dcopf.solve_time_s}s`, 'blue') + metricHTML('Lines Evaluated', R.dcopf.lines.length, `Thermal limits checked`, 'grey') + metricHTML('Congested Lines', R.dcopf.lines.filter(l=>l.loading_pct>=99).length, `At thermal limit`, 'red');
+      
+      // DC-OPF Charts
+      const lineLabels = R.dcopf.lines.map(l => l.id);
+      const loading = R.dcopf.lines.map(l => l.loading_pct);
+      new Chart(document.getElementById('ch-dcopf-lines'), { type: 'bar', data: { labels: lineLabels, datasets: [{ data: loading, backgroundColor: loading.map(v => v>=100 ? '#ef4444' : v>=80 ? '#f59e0b' : '#3b82f6'), borderRadius: 3 }] }, options: baseOpts('%') });
+      
+      const genLabels = R.dcopf.generators.map(g => `G${g.id}`);
+      new Chart(document.getElementById('ch-dcopf-gens'), { type: 'bar', data: { labels: genLabels, datasets: [{ data: R.dcopf.generators.map(g=>g.output_mw), backgroundColor: '#10b981', borderRadius: 3 }] }, options: baseOpts('MW') });
+
+      let tDc = `<thead><tr><th>Line ID</th><th class="num">Flow (MW)</th><th class="num">Loading %</th></tr></thead><tbody>`;
+      R.dcopf.lines.forEach(l => { tDc += `<tr><td>${l.id}</td><td class="num">${l.flow_mw}</td><td class="num"><span class="badge ${l.loading_pct>=99?'badge-red':l.loading_pct>=80?'badge-amber':'badge-green'}">${l.loading_pct}%</span></td></tr>`; });
+      document.getElementById('tbl-stat-dc').innerHTML = tDc + `</tbody>`;
+
+      let tGen = `<thead><tr><th>Generator ID</th><th class="num">Cleared Output (MW)</th></tr></thead><tbody>`;
+      R.dcopf.generators.forEach(g => { tGen += `<tr><td>G${g.id}</td><td class="num text-green-600 font-bold">${g.output_mw}</td></tr>`; });
+      document.getElementById('tbl-stat-dc-gens').innerHTML = tGen + `</tbody>`;
+    }
+  }
+
+  else if (currentMode === 'educ') {
+    document.getElementById('dash-main-title').innerText = "ED-UC Dispatch (24Hr)";
+    document.getElementById('nav-educ').classList.add('visible');
+    showTab('tab-educ', document.getElementById('nav-educ'));
+
+    const educ = R.educ, hours = educ.hourly.map(h => h.hour), N_G = educ.generators.length;
+    document.getElementById('educ-metrics').innerHTML = metricHTML('ED-UC Cost', fmt$(educ.total_cost), `Solved in ${educ.solve_time_s}s`, 'green') + metricHTML('Peak units ON', Math.max(...educ.hourly.map(h=>h.generators_on)) + ' / ' + N_G, 'Active units', 'grey');
+    
+    new Chart(document.getElementById('ch-educ-on'), { type: 'bar', data: { labels: hours, datasets: [{ data: educ.hourly.map(h=>h.generators_on), backgroundColor: '#10b98199', yAxisID:'y' }, { type:'line', data: educ.hourly.map(h=>h.lambda), borderColor:'#f59e0b', tension:.3, yAxisID:'y2' }] }, options: { ...baseOpts(), scales: { y:{title:{display:true,text:'units ON'}}, y2:{position:'right',title:{display:true,text:'$/MWh'}} } } });
+    const stackDs = educ.generators.filter(g => g.total_mwh > 0).map((g, i) => ({ label: g.name, data: g.dispatch, backgroundColor: PALETTE[i%PALETTE.length], stack: 'stack' }));
+    new Chart(document.getElementById('ch-educ-stack'), { type: 'bar', data: { labels: hours, datasets: stackDs }, options: { ...baseOpts('MW'), scales: { x:{stacked:true}, y:{stacked:true} } } });
+    new Chart(document.getElementById('ch-educ-mwh'), { type: 'bar', data: { labels: educ.generators.map(g=>g.name), datasets: [{ data: educ.generators.map(g=>g.total_mwh), backgroundColor: educ.generators.map(g=>g.total_mwh>0?'#10b981bb':'#e5e7eb') }] }, options: { indexAxis:'y', ...baseOpts() } });
+    buildHeatmap('hm-educ', educ.generators, '#10b981');
+  }
+
+  else if (currentMode === 'scuc') {
+    document.getElementById('dash-main-title').innerText = "Security Constrained UC (24Hr)";
+    ['nav-educ', 'nav-scuc', 'nav-compare', 'nav-network'].forEach(id => document.getElementById(id).classList.add('visible'));
+    showTab('tab-scuc', document.getElementById('nav-scuc'));
+
+    const educ = R.educ, scuc = R.scuc, cmp = R.comparison, hours = educ.hourly.map(h => h.hour), N_G = educ.generators.length;
+    
+    // SCUC Metrics & Charts
+    document.getElementById('scuc-metrics').innerHTML = metricHTML('SCUC Cost', fmt$(scuc.total_cost), `Solved in ${scuc.solve_time_s}s`, 'blue') + metricHTML('Security Premium', fmt$(cmp.premium), `${cmp.premium_pct.toFixed(2)}% cost of N-1`, 'amber');
+    new Chart(document.getElementById('ch-scuc-on'), { type: 'bar', data: { labels: hours, datasets: [{ data: scuc.hourly.map(h=>h.generators_on), backgroundColor: '#3b82f699', yAxisID:'y' }, { type:'line', data: scuc.hourly.map(h=>h.lambda), borderColor:'#f59e0b', tension:.3, yAxisID:'y2' }] }, options: { ...baseOpts(), scales: { y:{title:{display:true,text:'units ON'}}, y2:{position:'right',title:{display:true,text:'$/MWh'}} } } });
+    const stackDsS = scuc.generators.filter(g => g.total_mwh > 0).map((g, i) => ({ label: g.name, data: g.dispatch, backgroundColor: PALETTE[i%PALETTE.length], stack: 'stack' }));
+    new Chart(document.getElementById('ch-scuc-stack'), { type: 'bar', data: { labels: hours, datasets: stackDsS }, options: { ...baseOpts('MW'), scales: { x:{stacked:true}, y:{stacked:true} } } });
+    new Chart(document.getElementById('ch-scuc-mwh'), { type: 'bar', data: { labels: scuc.generators.map(g=>g.name), datasets: [{ data: scuc.generators.map(g=>g.total_mwh), backgroundColor: scuc.generators.map(g=>g.total_mwh>0?'#3b82f6bb':'#e5e7eb') }] }, options: { indexAxis:'y', ...baseOpts() } });
+    buildHeatmap('hm-scuc', scuc.generators, '#3b82f6');
+
+    // ED-UC Tab (Fallback)
+    document.getElementById('educ-metrics').innerHTML = metricHTML('ED-UC Cost', fmt$(educ.total_cost), `Unconstrained cost`, 'green');
+    new Chart(document.getElementById('ch-educ-on'), { type: 'bar', data: { labels: hours, datasets: [{ data: educ.hourly.map(h=>h.generators_on), backgroundColor: '#10b98199', yAxisID:'y' }, { type:'line', data: educ.hourly.map(h=>h.lambda), borderColor:'#f59e0b', tension:.3, yAxisID:'y2' }] }, options: { ...baseOpts(), scales: { y:{title:{display:true,text:'units ON'}}, y2:{position:'right',title:{display:true,text:'$/MWh'}} } } });
+    const stackDsE = educ.generators.filter(g => g.total_mwh > 0).map((g, i) => ({ label: g.name, data: g.dispatch, backgroundColor: PALETTE[i%PALETTE.length], stack: 'stack' }));
+    new Chart(document.getElementById('ch-educ-stack'), { type: 'bar', data: { labels: hours, datasets: stackDsE }, options: { ...baseOpts('MW'), scales: { x:{stacked:true}, y:{stacked:true} } } });
+    new Chart(document.getElementById('ch-educ-mwh'), { type: 'bar', data: { labels: educ.generators.map(g=>g.name), datasets: [{ data: educ.generators.map(g=>g.total_mwh), backgroundColor: educ.generators.map(g=>g.total_mwh>0?'#10b981bb':'#e5e7eb') }] }, options: { indexAxis:'y', ...baseOpts() } });
+    buildHeatmap('hm-educ', educ.generators, '#10b981');
+
+    // Compare
+    new Chart(document.getElementById('ch-demand'), { type: 'line', data: { labels: hours, datasets: [{ data: educ.hourly.map(h=>h.demand_mw), borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,.08)', fill: true, tension: .35 }] }, options: baseOpts('MW') });
+    new Chart(document.getElementById('ch-hcost'), { type: 'line', data: { labels: hours, datasets: [{ data: educ.hourly.map(h=>h.cost), borderColor:'#10b981', fill:true, backgroundColor:'rgba(16,185,129,.07)', tension:.35 }, { data: scuc.hourly.map(h=>h.cost), borderColor:'#3b82f6', borderDash:[5,3], tension:.35 }] }, options: baseOpts('$/h') });
+    new Chart(document.getElementById('ch-delta'), { type: 'bar', data: { labels: hours, datasets: [{ data: cmp.hourly_delta.map(h=>h.delta), backgroundColor: cmp.hourly_delta.map(h=>h.delta>=0 ? 'rgba(59,130,246,.55)' : 'rgba(16,185,129,.55)') }] }, options: baseOpts('$ diff') });
+    new Chart(document.getElementById('ch-on-cmp'), { type: 'bar', data: { labels: hours, datasets: [{ label:'ED-UC', data:educ.hourly.map(h=>h.generators_on), backgroundColor:'rgba(16,185,129,.65)' }, { label:'SCUC', data:scuc.hourly.map(h=>h.generators_on), backgroundColor:'rgba(59,130,246,.55)' }] }, options: baseOpts() });
+    const diffMwh = educ.generators.map((g,i) => Math.round((scuc.generators[i].total_mwh - g.total_mwh)*100)/100);
+    new Chart(document.getElementById('ch-gen-cmp'), { type: 'bar', data: { labels: educ.generators.map(g=>g.name), datasets: [{ data: diffMwh, backgroundColor: diffMwh.map(v => v>0 ? 'rgba(59,130,246,.65)' : v<0 ? 'rgba(16,185,129,.65)' : '#e5e7eb') }] }, options: { indexAxis:'y', ...baseOpts() } });
+
+    // Network
+    const lines = scuc.lines || [];
+    if(lines.length > 0) {
+      document.getElementById('net-metrics').innerHTML = metricHTML('Total lines', R.meta.n_lines, 'Analyzed', 'grey') + metricHTML('Lines ≥ 80%', lines.filter(l=>l.max_loading_pct>=80).length, 'Heavily loaded', 'amber');
+      const top20 = [...lines].sort((a,b) => b.max_loading_pct - a.max_loading_pct).slice(0,20);
+      new Chart(document.getElementById('ch-top-lines'), { type: 'bar', data: { labels: top20.map(l => `L${l.line_index}`), datasets: [{ data: top20.map(l => l.max_loading_pct), backgroundColor: top20.map(l => l.max_loading_pct>=100 ? '#ef444499' : l.max_loading_pct>=80 ? '#f59e0b99' : '#3b82f699') }] }, options: { indexAxis:'y', ...baseOpts() } });
+      
+      const bins = [0,10,20,30,40,50,60,70,80,90,95,100], hist = Array(11).fill(0);
+      lines.forEach(l => { for(let i=0; i<11; i++) { if(l.max_loading_pct >= bins[i] && l.max_loading_pct < bins[i+1]) { hist[i]++; break; } } if(l.max_loading_pct >= 100) hist[10]++; });
+      new Chart(document.getElementById('ch-load-hist'), { type: 'bar', data: { labels: bins.slice(0,-1).map((b,i) => `${b}–${bins[i+1]}%`), datasets: [{ data: hist, backgroundColor: hist.map((_,i) => i>=10 ? '#ef444499' : i>=8 ? '#f59e0b99' : '#3b82f699') }] }, options: baseOpts() });
+
+      let tL = `<thead><tr><th>Line</th><th>From</th><th>To</th><th>Rating</th><th>Loading</th></tr></thead><tbody>`;
+      [...lines].filter(l=>l.max_loading_pct>=80).sort((a,b)=>b.max_loading_pct-a.max_loading_pct).forEach(l => {
+        tL += `<tr><td>L${l.line_index}</td><td>${l.from_bus}</td><td>${l.to_bus}</td><td>${l.rate_mw} MW</td><td><span class="badge ${l.max_loading_pct>=100?'badge-red':'badge-amber'}">${l.max_loading_pct.toFixed(1)}%</span></td></tr>`;
+      });
+      document.getElementById('tbl-lines').innerHTML = tL + `</tbody>`;
+    }
+  }
+}
+</script>
+</body>
+</html>
