@@ -343,7 +343,7 @@ async function doLogin() {
   const remember = document.getElementById('rememberMe').checked;
   if(!email || !password) return showAlert("Fill all fields.");
 
-  const res = await fetch('http://127.0.0.1:5000/auth/login', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, password}) });
+  const res = await fetch('https://feature-middle-crimes-costs.trycloudflare.com/auth/login', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, password}) });
   if (res.ok) {
     if(remember) localStorage.setItem('grid_session', email);
     document.getElementById('authOverlay').style.display = 'none';
@@ -355,7 +355,7 @@ async function requestOTP() {
   const email = document.getElementById('regEmail').value.trim();
   if(!email) return showAlert("Provide email.");
   document.getElementById('btn-req-otp').innerText = "Sending...";
-  const res = await fetch('http://127.0.0.1:5000/auth/request-otp', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email}) });
+  const res = await fetch('https://feature-middle-crimes-costs.trycloudflare.com/auth/request-otp', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email}) });
   if (res.ok) switchAuth('verify');
   else { const data = await res.json(); showAlert(data.error); document.getElementById('btn-req-otp').innerText = "Send Verification OTP"; }
 }
@@ -366,7 +366,7 @@ async function submitOTP() {
   const password = document.getElementById('regPass').value;
   if(!otp || !password) return showAlert("Fill all fields.");
 
-  const res = await fetch('http://127.0.0.1:5000/auth/verify', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, otp, password}) });
+  const res = await fetch('https://feature-middle-crimes-costs.trycloudflare.com/auth/verify', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, otp, password}) });
   if (res.ok) {
     localStorage.setItem('grid_session', email);
     document.getElementById('authOverlay').style.display = 'none';
