@@ -436,15 +436,15 @@ document.getElementById('apiForm').addEventListener('submit', async (e) => {
   }
 
   try {
-    await fetch('https://gridoptima-3.onrender.com/solve', { method: 'POST', body: fd });
+    await fetch('https://feature-middle-crimes-costs.trycloudflare.com/solve', { method: 'POST', body: fd });
     const poll = setInterval(async () => {
-      const res = await fetch('https://gridoptima-3.onrender.com/status');
+      const res = await fetch('https://feature-middle-crimes-costs.trycloudflare.com/status');
       const data = await res.json();
       if(data.logs.length > 0) stat.innerText = "> " + data.logs[data.logs.length-1];
       
       if(data.status === "done") {
         clearInterval(poll);
-        const resData = await fetch('https://gridoptima-3.onrender.com/result');
+        const resData = await fetch('https://feature-middle-crimes-costs.trycloudflare.com/result');
         R = await resData.json();
         
         document.getElementById('upload-screen').style.display = 'none';
