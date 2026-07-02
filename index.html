@@ -221,6 +221,11 @@ tbody tr:hover td { background: var(--surface2); }
         <div class="panel-title">Economic Dispatch Ledger</div>
         <div class="tbl-wrap"><table id="tbl-stat-ed"></table></div>
       </div>
+      <div class="panel" id="panel-ed-shadow">
+        <div class="panel-title">Bus Shadow Prices (λ)</div>
+        <div id="ed-shadow-note" style="font-size:11.5px;color:var(--hint);margin-bottom:10px;"></div>
+        <div class="tbl-wrap"><table id="tbl-ed-shadow"></table></div>
+      </div>
     </div>
     <div id="tab-dcopf" class="tab">
       <div class="metrics" id="stat-dc-metrics"></div>
@@ -243,6 +248,20 @@ tbody tr:hover td { background: var(--surface2); }
           <div class="panel-title">Generation Resource Ledger</div>
           <div class="tbl-wrap"><table id="tbl-stat-dc-gens"></table></div>
         </div>
+      </div>
+      <div class="g2 mb">
+        <div class="panel">
+          <div class="panel-title">Bus Locational Marginal Prices (λ, ₹/MWh)</div>
+          <div style="position:relative;height:220px"><canvas id="ch-dcopf-lmp"></canvas></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Line Congestion Shadow Prices (μ, ₹/MWh)</div>
+          <div style="position:relative;height:220px"><canvas id="ch-dcopf-mu"></canvas></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Bus LMP Ledger</div>
+        <div class="tbl-wrap"><table id="tbl-dc-lmp"></table></div>
       </div>
     </div>
     <div id="tab-educ" class="tab">
@@ -268,6 +287,17 @@ tbody tr:hover td { background: var(--surface2); }
       </div>
       <div class="panel mb"><div class="panel-title">Energy dispatched per generator (MWh)</div><div style="position:relative;height:300px"><canvas id="ch-scuc-mwh"></canvas></div></div>
       <div class="panel mb"><div class="panel-title">Commitment schedule <span style="font-weight:400;color:var(--hint)">(blue = ON)</span></div><div class="heatmap-scroll" id="hm-scuc"></div></div>
+      <div class="g2 mb">
+        <div class="panel">
+          <div class="panel-title">Bus LMP — avg &amp; peak (₹/MWh)</div>
+          <div style="position:relative;height:220px"><canvas id="ch-scuc-lmp"></canvas></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Hourly Bus LMP curves (₹/MWh)</div>
+          <div style="position:relative;height:220px"><canvas id="ch-scuc-lmp-hourly"></canvas></div>
+        </div>
+      </div>
+      <div class="panel mb"><div class="panel-title">Line Congestion Shadow Price μ (₹/MWh)</div><div class="tbl-wrap"><table id="tbl-scuc-mu"></table></div></div>
     </div>
     <div id="tab-compare" class="tab">
       <div class="panel mb"><div class="panel-title">Hourly System Demand (MW)</div><div style="position:relative;height:200px"><canvas id="ch-demand"></canvas></div></div>
@@ -291,6 +321,11 @@ tbody tr:hover td { background: var(--surface2); }
         <div class="panel"><div class="panel-title">Top 20 most loaded lines</div><div style="position:relative;height:220px"><canvas id="ch-top-lines"></canvas></div></div>
       </div>
       <div class="panel"><div class="panel-title">Congested &amp; heavily loaded lines (≥ 80%)</div><div class="tbl-wrap"><table id="tbl-lines"></table></div></div>
+      <div class="g2 mb">
+        <div class="panel"><div class="panel-title">Bus Locational Marginal Prices — Avg &amp; Peak (₹/MWh)</div><div style="position:relative;height:220px"><canvas id="ch-bus-lmp"></canvas></div></div>
+        <div class="panel"><div class="panel-title">Line Congestion Shadow Prices — Peak |μ| (₹/MWh)</div><div style="position:relative;height:220px"><canvas id="ch-line-mu"></canvas></div></div>
+      </div>
+      <div class="panel"><div class="panel-title">Bus LMP Ledger (SCUC, fixed-commitment LP duals)</div><div class="tbl-wrap"><table id="tbl-bus-lmp"></table></div></div>
     </div>
   </div>
 </div>
@@ -400,6 +435,11 @@ function downloadReport() {
     ed.generators.forEach(g => {
       lines.push('  ' + [`G${g.id}`, g.dispatch, `₹${g.cost}`, g.marginal?'MARGINAL':'BASELOAD'].join('\t\t'));
     });
+    if (ed.bus_shadow_prices) {
+      lines.push('');
+      lines.push('  Bus Shadow Prices (λ):');
+      ed.bus_shadow_prices.forEach(b => lines.push(`  Bus ${b.bus_id}: ₹${b.lambda}/MWh`));
+    }
   }
 
   if (currentMode === 'dcopf' && R.dcopf) {
@@ -414,8 +454,13 @@ function downloadReport() {
     dc.generators.forEach(g => lines.push(`  G${g.id}: ${g.output_mw} MW`));
     lines.push('');
     lines.push('  Line Flows:');
-    lines.push('  ' + ['Line','Flow (MW)','Loading %'].join('\t\t'));
-    dc.lines.forEach(l => lines.push('  ' + [l.id, l.flow_mw, `${l.loading_pct}%`].join('\t\t')));
+    lines.push('  ' + ['Line','Flow (MW)','Loading %','μ (₹/MWh)'].join('\t\t'));
+    dc.lines.forEach(l => lines.push('  ' + [l.id, l.flow_mw, `${l.loading_pct}%`, `₹${l.mu}`].join('\t\t')));
+    if (dc.bus_lmp) {
+      lines.push('');
+      lines.push('  Bus Locational Marginal Prices (λ):');
+      dc.bus_lmp.forEach(b => lines.push(`  Bus ${b.bus_id}: ₹${b.lambda}/MWh`));
+    }
   }
 
   if ((currentMode === 'educ' || currentMode === 'scuc') && R.educ) {
@@ -576,6 +621,12 @@ function buildDashboard() {
       let tEd=`<thead><tr><th>Generator ID</th><th class="num">Dispatch (MW)</th><th class="num">Cost (₹)</th><th>Status</th></tr></thead><tbody>`;
       R.ed.generators.forEach(g=>{tEd+=`<tr><td>G${g.id}</td><td class="num">${g.dispatch}</td><td class="num">₹${g.cost}</td><td>${g.marginal?'<span class="badge badge-amber">MARGINAL</span>':'<span class="badge badge-green">BASELOAD</span>'}</td></tr>`;});
       document.getElementById('tbl-stat-ed').innerHTML=tEd+'</tbody>';
+      if (R.ed.bus_shadow_prices) {
+        document.getElementById('ed-shadow-note').innerText = R.ed.shadow_price_note || '';
+        let tShadow=`<thead><tr><th>Bus ID</th><th class="num">λ (₹/MWh)</th></tr></thead><tbody>`;
+        R.ed.bus_shadow_prices.forEach(b=>{tShadow+=`<tr><td>Bus ${b.bus_id}</td><td class="num">₹${b.lambda}</td></tr>`;});
+        document.getElementById('tbl-ed-shadow').innerHTML=tShadow+'</tbody>';
+      }
     }
   }
   else if (currentMode === 'dcopf') {
@@ -597,12 +648,21 @@ function buildDashboard() {
       const lineLabels=R.dcopf.lines.map(l=>l.id), loading=R.dcopf.lines.map(l=>l.loading_pct);
       new Chart(document.getElementById('ch-dcopf-lines'),{type:'bar',data:{labels:lineLabels,datasets:[{data:loading,backgroundColor:loading.map(v=>v>=100?'#ef4444':v>=80?'#f59e0b':'#3b82f6'),borderRadius:3}]},options:baseOpts('%')});
       new Chart(document.getElementById('ch-dcopf-gens'),{type:'bar',data:{labels:R.dcopf.generators.map(g=>`G${g.id}`),datasets:[{data:R.dcopf.generators.map(g=>g.output_mw),backgroundColor:'#10b981',borderRadius:3}]},options:baseOpts('MW')});
-      let tDc=`<thead><tr><th>Line ID</th><th class="num">Flow (MW)</th><th class="num">Loading %</th></tr></thead><tbody>`;
-      R.dcopf.lines.forEach(l=>{tDc+=`<tr><td>${l.id}</td><td class="num">${l.flow_mw}</td><td class="num"><span class="badge ${l.loading_pct>=99?'badge-red':l.loading_pct>=80?'badge-amber':'badge-green'}">${l.loading_pct}%</span></td></tr>`;});
+      let tDc=`<thead><tr><th>Line ID</th><th class="num">Flow (MW)</th><th class="num">Loading %</th><th class="num">μ (₹/MWh)</th></tr></thead><tbody>`;
+      R.dcopf.lines.forEach(l=>{tDc+=`<tr><td>${l.id}</td><td class="num">${l.flow_mw}</td><td class="num"><span class="badge ${l.loading_pct>=99?'badge-red':l.loading_pct>=80?'badge-amber':'badge-green'}">${l.loading_pct}%</span></td><td class="num">${l.mu>0?'<span class="badge badge-amber">₹'+l.mu+'</span>':'—'}</td></tr>`;});
       document.getElementById('tbl-stat-dc').innerHTML=tDc+'</tbody>';
       let tGen=`<thead><tr><th>Generator ID</th><th class="num">Cleared Output (MW)</th></tr></thead><tbody>`;
       R.dcopf.generators.forEach(g=>{tGen+=`<tr><td>G${g.id}</td><td class="num">${g.output_mw}</td></tr>`;});
       document.getElementById('tbl-stat-dc-gens').innerHTML=tGen+'</tbody>';
+      if (R.dcopf.bus_lmp) {
+        const lmpLabels=R.dcopf.bus_lmp.map(b=>`Bus ${b.bus_id}`);
+        new Chart(document.getElementById('ch-dcopf-lmp'),{type:'bar',data:{labels:lmpLabels,datasets:[{data:R.dcopf.bus_lmp.map(b=>b.lambda),backgroundColor:'#3b82f6',borderRadius:3}]},options:baseOpts('₹/MWh')});
+        const lineLabelsMu=R.dcopf.lines.map(l=>l.id), muVals=R.dcopf.lines.map(l=>l.mu);
+        new Chart(document.getElementById('ch-dcopf-mu'),{type:'bar',data:{labels:lineLabelsMu,datasets:[{data:muVals,backgroundColor:muVals.map(v=>v>0?'#f59e0b':'#e5e7eb'),borderRadius:3}]},options:baseOpts('₹/MWh')});
+        let tLmp=`<thead><tr><th>Bus ID</th><th class="num">λ (₹/MWh)</th></tr></thead><tbody>`;
+        R.dcopf.bus_lmp.forEach(b=>{tLmp+=`<tr><td>Bus ${b.bus_id}</td><td class="num">₹${b.lambda}</td></tr>`;});
+        document.getElementById('tbl-dc-lmp').innerHTML=tLmp+'</tbody>';
+      }
     }
   }
   else if (currentMode === 'educ') {
@@ -628,6 +688,16 @@ function buildDashboard() {
     new Chart(document.getElementById('ch-scuc-stack'),{type:'bar',data:{labels:hours,datasets:stackDsS},options:{...baseOpts('MW'),scales:{x:{stacked:true},y:{stacked:true}}}});
     new Chart(document.getElementById('ch-scuc-mwh'),{type:'bar',data:{labels:scuc.generators.map(g=>g.name),datasets:[{data:scuc.generators.map(g=>g.total_mwh),backgroundColor:scuc.generators.map(g=>g.total_mwh>0?'#3b82f6bb':'#e5e7eb')}]},options:{indexAxis:'y',...baseOpts()}});
     buildHeatmap('hm-scuc',scuc.generators,'#3b82f6');
+    if (scuc.bus_lmp) {
+      const busLabels=scuc.bus_lmp.map(b=>`Bus ${b.bus_id}`);
+      new Chart(document.getElementById('ch-scuc-lmp'),{type:'bar',data:{labels:busLabels,datasets:[{label:'Avg λ',data:scuc.bus_lmp.map(b=>b.avg_lambda),backgroundColor:'#3b82f6'},{label:'Peak λ',data:scuc.bus_lmp.map(b=>b.max_lambda),backgroundColor:'#f59e0b'}]},options:{...baseOpts('₹/MWh'),plugins:{legend:{display:true,labels:{color:TC,font:{size:10}}}}}});
+      new Chart(document.getElementById('ch-scuc-lmp-hourly'),{type:'line',data:{labels:hours,datasets:scuc.bus_lmp.map((b,i)=>({label:`Bus ${b.bus_id}`,data:b.hourly,borderColor:PALETTE[i%PALETTE.length],tension:.3,fill:false}))},options:{...baseOpts('₹/MWh'),plugins:{legend:{display:true,labels:{color:TC,font:{size:10}}}}}});
+    }
+    if (scuc.lines && scuc.lines.some(l=>l.mu_avg!==undefined)) {
+      let tMu=`<thead><tr><th>Line</th><th>From</th><th>To</th><th class="num">Avg μ (₹/MWh)</th><th class="num">Peak μ (₹/MWh)</th></tr></thead><tbody>`;
+      [...scuc.lines].sort((a,b)=>b.mu_max-a.mu_max).forEach(l=>{tMu+=`<tr><td>L${l.line_index}</td><td>${l.from_bus}</td><td>${l.to_bus}</td><td class="num">${l.mu_avg>0?'₹'+l.mu_avg:'—'}</td><td class="num">${l.mu_max>0?'<span class="badge badge-amber">₹'+l.mu_max+'</span>':'—'}</td></tr>`;});
+      document.getElementById('tbl-scuc-mu').innerHTML=tMu+'</tbody>';
+    }
     document.getElementById('educ-metrics').innerHTML=metricHTML('ED-UC Cost',fmt$(educ.total_cost),'Unconstrained cost','green');
     new Chart(document.getElementById('ch-educ-on'),{type:'bar',data:{labels:hours,datasets:[{data:educ.hourly.map(h=>h.generators_on),backgroundColor:'#10b98199',yAxisID:'y'},{type:'line',data:educ.hourly.map(h=>h.lambda),borderColor:'#f59e0b',tension:.3,yAxisID:'y2'}]},options:{...baseOpts(),scales:{y:{title:{display:true,text:'units ON'}},y2:{position:'right',title:{display:true,text:'₹/MWh'}}}}});
     const stackDsE=educ.generators.filter(g=>g.total_mwh>0).map((g,i)=>({label:g.name,data:g.dispatch,backgroundColor:PALETTE[i%PALETTE.length],stack:'stack'}));
@@ -648,9 +718,18 @@ function buildDashboard() {
       const bins=[0,10,20,30,40,50,60,70,80,90,95,100],hist=Array(11).fill(0);
       lines.forEach(l=>{for(let i=0;i<11;i++){if(l.max_loading_pct>=bins[i]&&l.max_loading_pct<bins[i+1]){hist[i]++;break;}}if(l.max_loading_pct>=100)hist[10]++;});
       new Chart(document.getElementById('ch-load-hist'),{type:'bar',data:{labels:bins.slice(0,-1).map((b,i)=>`${b}–${bins[i+1]}%`),datasets:[{data:hist,backgroundColor:hist.map((_,i)=>i>=10?'#ef444499':i>=8?'#f59e0b99':'#3b82f699')}]},options:baseOpts()});
-      let tL=`<thead><tr><th>Line</th><th>From</th><th>To</th><th>Rating</th><th>Loading</th></tr></thead><tbody>`;
-      [...lines].filter(l=>l.max_loading_pct>=80).sort((a,b)=>b.max_loading_pct-a.max_loading_pct).forEach(l=>{tL+=`<tr><td>L${l.line_index}</td><td>${l.from_bus}</td><td>${l.to_bus}</td><td>${l.rate_mw} MW</td><td><span class="badge ${l.max_loading_pct>=100?'badge-red':'badge-amber'}">${l.max_loading_pct.toFixed(1)}%</span></td></tr>`;});
+      let tL=`<thead><tr><th>Line</th><th>From</th><th>To</th><th>Rating</th><th>Loading</th><th class="num">Peak μ (₹/MWh)</th></tr></thead><tbody>`;
+      [...lines].filter(l=>l.max_loading_pct>=80).sort((a,b)=>b.max_loading_pct-a.max_loading_pct).forEach(l=>{tL+=`<tr><td>L${l.line_index}</td><td>${l.from_bus}</td><td>${l.to_bus}</td><td>${l.rate_mw} MW</td><td><span class="badge ${l.max_loading_pct>=100?'badge-red':'badge-amber'}">${l.max_loading_pct.toFixed(1)}%</span></td><td class="num">${l.mu_max?'₹'+l.mu_max:'—'}</td></tr>`;});
       document.getElementById('tbl-lines').innerHTML=tL+'</tbody>';
+      const busLmp=scuc.bus_lmp||[];
+      if(busLmp.length>0){
+        new Chart(document.getElementById('ch-bus-lmp'),{type:'bar',data:{labels:busLmp.map(b=>`Bus ${b.bus_id}`),datasets:[{label:'Avg λ',data:busLmp.map(b=>b.avg_lambda),backgroundColor:'#3b82f699'},{label:'Peak λ',data:busLmp.map(b=>b.max_lambda),backgroundColor:'#ef444499'}]},options:{...baseOpts('₹/MWh'),plugins:{legend:{display:true,labels:{color:TC,font:{size:10}}}}}});
+        let tLmp=`<thead><tr><th>Bus ID</th><th class="num">Avg λ (₹/MWh)</th><th class="num">Peak λ (₹/MWh)</th></tr></thead><tbody>`;
+        busLmp.forEach(b=>{tLmp+=`<tr><td>Bus ${b.bus_id}</td><td class="num">₹${b.avg_lambda}</td><td class="num">₹${b.max_lambda}</td></tr>`;});
+        document.getElementById('tbl-bus-lmp').innerHTML=tLmp+'</tbody>';
+      }
+      const muLines=[...lines].filter(l=>l.mu_max>0).sort((a,b)=>b.mu_max-a.mu_max).slice(0,20);
+      new Chart(document.getElementById('ch-line-mu'),{type:'bar',data:{labels:muLines.map(l=>`L${l.line_index}`),datasets:[{data:muLines.map(l=>l.mu_max),backgroundColor:'#f59e0b99'}]},options:{indexAxis:'y',...baseOpts('₹/MWh')}});
     }
   }
 }

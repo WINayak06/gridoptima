@@ -132,12 +132,33 @@ def run_static_suite(
                     }
                 )
 
+            # ── Shadow prices (bus λ) ───────────────────────────────
+            # NOTE: classic ED is a single-node ("copper-plate") model — there
+            # is only ONE power-balance constraint (total gen = total demand),
+            # so there is only one dual value (mcp). Because no network/branch
+            # constraints exist, every bus shares the same shadow price. We
+            # still report it per-bus so the frontend/report can show a
+            # bus-indexed table consistent with DC-OPF/SCUC.
+            bus_id_col = next(
+                (c for c in ["bus_id", "bus_i", "bus"] if c in bdf.columns), None
+            )
+            bus_shadow_prices = []
+            for i, row in bdf.reset_index(drop=True).iterrows():
+                bid = int(_safe_float(row[bus_id_col])) if bus_id_col else i + 1
+                bus_shadow_prices.append({"bus_id": bid, "lambda": round(mcp, 4)})
+
             results["ed"] = {
                 "total_cost":    round(total_cost, 2),
                 "mcp":           round(mcp, 2),
                 "total_demand":  round(total_demand, 2),
                 "generators":    gen_units,
                 "solve_time_s":  round(time.time() - t0, 3),
+                "bus_shadow_prices": bus_shadow_prices,
+                "shadow_price_note": (
+                    "ED is a single-bus (copper-plate) model with no network "
+                    "constraints, so \u03bb is uniform across all buses and there "
+                    "are no line shadow prices (\u03bc)."
+                ),
             }
             log("ED Solved Successfully.")
         else:
@@ -274,6 +295,28 @@ def run_static_suite(
                 t_cost += out_mw * slope
                 gen_out.append({"id": i + 1, "output_mw": round(out_mw, 2)})
 
+            # ── Shadow prices ────────────────────────────────────────
+            # Bus λ (LMP): dual of each nodal power-balance equality row.
+            # `res.eqlin.marginals` gives dz/d(b_eq) in $/pu since both the
+            # objective (c_vec) and b_eq were built in per-unit (base_mva)
+            # quantities — divide by base_mva to convert to $/MWh.
+            bus_lmp = []
+            if hasattr(res, "eqlin") and res.eqlin is not None:
+                lam_pu = res.eqlin.marginals
+                for i, b in enumerate(buses):
+                    bid = int(_safe_float(b.get("bus_i", b.get("bus_id", b.get("bus", i + 1)))))
+                    bus_lmp.append({"bus_id": bid, "lambda": round(float(lam_pu[i]) / base_mva, 4)})
+
+            # Line μ (congestion shadow price): dual of the two thermal-limit
+            # inequality rows per constrained branch (only one can bind at a
+            # time). Same pu → $/MWh conversion as above.
+            mu_map = {}
+            if n_ineq > 0 and hasattr(res, "ineqlin") and res.ineqlin is not None:
+                ineq_marg = res.ineqlin.marginals
+                for k, (br, f_idx, t_idx, b_val, limit_pu) in enumerate(constrained_branches):
+                    mu_val = (abs(ineq_marg[2 * k]) + abs(ineq_marg[2 * k + 1])) / base_mva
+                    mu_map[id(br)] = round(float(mu_val), 4)
+
             line_out = []
             for br, f_idx, t_idx, b_val in valid_branches:
                 flow = (Va[f_idx] - Va[t_idx]) * b_val * base_mva
@@ -283,6 +326,7 @@ def run_static_suite(
                         "id":           str(br.get("id", br.get("line_index", 0))),
                         "flow_mw":      round(flow, 2),
                         "loading_pct":  round(abs(flow) / cap * 100, 2) if cap > 0 else 0.0,
+                        "mu":           mu_map.get(id(br), 0.0),
                     }
                 )
 
@@ -291,6 +335,14 @@ def run_static_suite(
                 "generators":   gen_out,
                 "lines":        line_out,
                 "solve_time_s": round(time.time() - t0, 3),
+                "bus_lmp":      bus_lmp,
+                "shadow_price_note": (
+                    "\u03bb is the dual of each bus's power-balance constraint "
+                    "(locational marginal price, \u20b9/MWh). \u03bc is the dual of a "
+                    "line's thermal-limit constraint (\u20b9/MWh value of relaxing "
+                    "that line's rating by 1 MW) — non-zero only for congested "
+                    "(binding) lines."
+                ),
             }
             log("DC-OPF Solved Successfully.")
         else:
@@ -546,6 +598,82 @@ def run_uc_suite(
             committed = [g for g in range(N_GEN) if U[g, t] == 1]
             lam.append(float(max(b_cost[g] for g in committed)) if committed else 0.0)
 
+        # ── True hourly shadow prices via fixed-commitment LP re-solve ────
+        # scipy.optimize.milp does not return dual values — duals aren't even
+        # well-defined once integer variables are involved (the feasible
+        # region isn't convex). Standard fix: FIX u[g,t] (and y[g,t], via the
+        # Pmin/Pmax bounds they gate) at their optimal MILP values, which
+        # collapses the problem into a pure LP over p[g,t] only. Re-solving
+        # that LP with `linprog` gives real duals:
+        #   - dual of the hourly system-balance row  → system λ_t (₹/MWh)
+        #   - dual of each line's flow-limit row (SCUC) → line μ_l,t (₹/MWh)
+        # Bus-level LMPs for SCUC are then reconstructed from λ_t and μ_l,t
+        # via the PTDF decomposition:  LMP_bus,t = λ_t + Σ_l PTDF[l,bus]·μ_l,t
+        lam_hourly    = np.array(lam)     # fallback stays as proxy unless LP succeeds
+        mu_hourly     = None              # (N_LINE, N_T) congestion price magnitude
+        bus_lmp_matrix = None             # (N_BUS, N_T) locational marginal price
+        try:
+            NP = N_GEN * N_T
+
+            def jdx_p(g, t):
+                return g * N_T + t
+
+            lp_c = np.zeros(NP)
+            lp_bounds = []
+            for g in range(N_GEN):
+                for t in range(N_T):
+                    lp_c[jdx_p(g, t)] = b_cost[g]
+                    lp_bounds.append((Pmin[g] * U[g, t], Pmax[g] * U[g, t]))
+
+            # C1: system balance, one row per hour
+            r1, c1, v1 = [], [], []
+            for t in range(N_T):
+                for g in range(N_GEN):
+                    r1.append(t); c1.append(jdx_p(g, t)); v1.append(1.0)
+            A_eq2 = sp.csr_matrix((v1, (r1, c1)), shape=(N_T, NP))
+            b_eq2 = D_total.copy()
+
+            A_ub2, b_ub2, n_lr = None, None, 0
+            if mode == "scuc" and PTDF is not None:
+                n_lr = N_LINE * N_T
+                ru, cu, vu, rhs_u = [], [], [], []
+                rl, cl, vl, rhs_l = [], [], [], []
+                for l in range(N_LINE):
+                    for t in range(N_T):
+                        shift = float(PTDF_D[l, t])
+                        row = l * N_T + t
+                        for g in range(N_GEN):
+                            coeff = float(ptdf_g[l, g])
+                            if coeff != 0.0:
+                                ru.append(row); cu.append(jdx_p(g, t)); vu.append(coeff)
+                                rl.append(row); cl.append(jdx_p(g, t)); vl.append(-coeff)
+                        rhs_u.append(rate[l] + shift)
+                        rhs_l.append(rate[l] - shift)
+                A_up = sp.csr_matrix((vu, (ru, cu)), shape=(n_lr, NP))
+                A_lo = sp.csr_matrix((vl, (rl, cl)), shape=(n_lr, NP))
+                A_ub2 = sp.vstack([A_up, A_lo]).tocsr()
+                b_ub2 = np.concatenate([np.array(rhs_u), np.array(rhs_l)])
+
+            lp_res = linprog(
+                c=lp_c, A_eq=A_eq2, b_eq=b_eq2, A_ub=A_ub2, b_ub=b_ub2,
+                bounds=lp_bounds, method="highs",
+            )
+
+            if lp_res.success and getattr(lp_res, "eqlin", None) is not None:
+                lam_hourly = lp_res.eqlin.marginals.copy()
+
+                if mode == "scuc" and PTDF is not None and getattr(lp_res, "ineqlin", None) is not None:
+                    ineq_m      = lp_res.ineqlin.marginals
+                    marg_upper  = ineq_m[:n_lr].reshape(N_LINE, N_T)
+                    marg_lower  = ineq_m[n_lr:].reshape(N_LINE, N_T)
+                    mu_hourly   = np.abs(marg_upper) + np.abs(marg_lower)
+                    signed_mu   = marg_upper - marg_lower                       # (N_LINE, N_T)
+                    bus_lmp_matrix = lam_hourly[None, :] + PTDF.T.dot(signed_mu)  # (N_BUS, N_T)
+            else:
+                log(f"{mode.upper()} shadow-price LP re-solve did not return duals; using λ proxy.")
+        except Exception as exc:
+            log(f"{mode.upper()} shadow-price computation failed ({exc}); using λ proxy.")
+
         # ── Line flows (SCUC) ─────────────────────────────────────────
         lines_out = []
         if mode == "scuc" and PTDF is not None:
@@ -561,15 +689,31 @@ def run_uc_suite(
             loading   = (np.abs(flows) / safe_rate[:, None]) * 100
 
             for i, row_data in line_df.iterrows():
-                lines_out.append(
-                    {
-                        "line_index":       int(row_data.get("line_index", row_data.get("id", i + 1))),
-                        "from_bus":         int(row_data.get("from_bus", row_data.get("fbus", 0))),
-                        "to_bus":           int(row_data.get("to_bus",   row_data.get("tbus", 0))),
-                        "rate_mw":          float(rate[i]),
-                        "max_loading_pct":  float(loading[i].max()),
-                    }
-                )
+                entry = {
+                    "line_index":       int(row_data.get("line_index", row_data.get("id", i + 1))),
+                    "from_bus":         int(row_data.get("from_bus", row_data.get("fbus", 0))),
+                    "to_bus":           int(row_data.get("to_bus",   row_data.get("tbus", 0))),
+                    "rate_mw":          float(rate[i]),
+                    "max_loading_pct":  float(loading[i].max()),
+                }
+                if mu_hourly is not None:
+                    entry["mu_hourly"] = [round(float(v), 4) for v in mu_hourly[i]]
+                    entry["mu_avg"]    = round(float(mu_hourly[i].mean()), 4)
+                    entry["mu_max"]    = round(float(mu_hourly[i].max()), 4)
+                lines_out.append(entry)
+
+        # ── Bus LMP table (SCUC only) ───────────────────────────────────
+        bus_lmp_out = None
+        if bus_lmp_matrix is not None:
+            bus_lmp_out = [
+                {
+                    "bus_id":      b + 1,
+                    "avg_lambda":  round(float(bus_lmp_matrix[b].mean()), 4),
+                    "max_lambda":  round(float(bus_lmp_matrix[b].max()), 4),
+                    "hourly":      [round(float(v), 4) for v in bus_lmp_matrix[b]],
+                }
+                for b in range(N_BUS)
+            ]
 
         # ── Package results ───────────────────────────────────────────
         results[mode] = {
@@ -586,7 +730,7 @@ def run_uc_suite(
                     "demand_mw":      float(D_total[t]),
                     "cost":           float(hourly_cost[t]),
                     "generators_on":  int(U[:, t].sum()),
-                    "lambda":         float(lam[t]),
+                    "lambda":         round(float(lam_hourly[t]), 4),
                     "startups":       int(Y[:, t].sum()),
                 }
                 for t in range(N_T)
@@ -613,6 +757,14 @@ def run_uc_suite(
                 for g in range(N_GEN)
             ],
             "lines": lines_out,
+            "bus_lmp": bus_lmp_out,
+            "shadow_price_note": (
+                "\u03bb (system marginal price) and, for SCUC, per-line \u03bc and "
+                "bus-level LMPs are recovered by fixing the MILP's optimal "
+                "commitment (u, y) and re-solving the resulting per-hour "
+                "dispatch LP for dual values \u2014 scipy's MILP solver itself "
+                "returns no duals. Bus LMP = \u03bb_t + \u03a3_l PTDF[l,bus]\u00b7\u03bc_l,t."
+            ),
         }
         log(f"{mode.upper()} complete. Total cost = ${res.fun:,.2f}  ({elapsed:.1f}s)")
 
