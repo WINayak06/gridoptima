@@ -21,8 +21,10 @@ import ssl
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from solver_core import run_static_suite, run_uc_suite
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 app.logger.removeHandler(default_handler)
 
 # ── SUPABASE CONFIGURATION ──────────────────────────────────────────────────
