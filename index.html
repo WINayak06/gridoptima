@@ -122,7 +122,6 @@ tbody tr:hover td { background: var(--surface2); }
 <body>
 <div id="heatmap-tooltip"></div>
 
-<!-- ── Auth Overlay ── -->
 <div id="authOverlay">
   <div class="auth-box">
     <h2 id="authTitle" style="margin-bottom:20px; font-family:system-ui; font-size:22px;">Welcome!</h2>
@@ -150,7 +149,6 @@ tbody tr:hover td { background: var(--surface2); }
   </div>
 </div>
 
-<!-- ── Upload Screen ── -->
 <div id="upload-screen" style="display:none;">
   <div class="brand">
     <div class="brand-icon">
@@ -185,7 +183,6 @@ tbody tr:hover td { background: var(--surface2); }
   </form>
 </div>
 
-<!-- ── Dashboard ── -->
 <div id="dashboard">
   <header class="hdr">
     <div class="hdr-brand">
@@ -216,7 +213,7 @@ tbody tr:hover td { background: var(--surface2); }
           <div style="position:relative;height:250px"><canvas id="ch-ed-dispatch"></canvas></div>
         </div>
         <div class="panel">
-          <div class="panel-title">Generator Operational Costs ($)</div>
+          <div class="panel-title">Generator Operational Costs (₹)</div>
           <div style="position:relative;height:250px"><canvas id="ch-ed-cost"></canvas></div>
         </div>
       </div>
@@ -252,7 +249,7 @@ tbody tr:hover td { background: var(--surface2); }
       <div class="metrics" id="educ-metrics"></div>
       <div class="g2 mb">
         <div class="panel"><div class="panel-title">Units online &amp; marginal cost</div>
-          <div class="legend"><div class="leg-item"><span class="leg-swatch" style="background:#10b981"></span>Units ON</div><div class="leg-item"><span class="leg-swatch" style="background:#f59e0b"></span>λ $/MWh</div></div>
+          <div class="legend"><div class="leg-item"><span class="leg-swatch" style="background:#10b981"></span>Units ON</div><div class="leg-item"><span class="leg-swatch" style="background:#f59e0b"></span>λ ₹/MWh</div></div>
           <div style="position:relative;height:190px"><canvas id="ch-educ-on"></canvas></div>
         </div>
         <div class="panel"><div class="panel-title">Hourly dispatch by generator (MW)</div><div style="position:relative;height:190px"><canvas id="ch-educ-stack"></canvas></div></div>
@@ -264,7 +261,7 @@ tbody tr:hover td { background: var(--surface2); }
       <div class="metrics" id="scuc-metrics"></div>
       <div class="g2 mb">
         <div class="panel"><div class="panel-title">Units online &amp; marginal cost</div>
-          <div class="legend"><div class="leg-item"><span class="leg-swatch" style="background:#3b82f6"></span>Units ON</div><div class="leg-item"><span class="leg-swatch" style="background:#f59e0b"></span>λ $/MWh</div></div>
+          <div class="legend"><div class="leg-item"><span class="leg-swatch" style="background:#3b82f6"></span>Units ON</div><div class="leg-item"><span class="leg-swatch" style="background:#f59e0b"></span>λ ₹/MWh</div></div>
           <div style="position:relative;height:190px"><canvas id="ch-scuc-on"></canvas></div>
         </div>
         <div class="panel"><div class="panel-title">Hourly dispatch by generator (MW)</div><div style="position:relative;height:190px"><canvas id="ch-scuc-stack"></canvas></div></div>
@@ -284,7 +281,7 @@ tbody tr:hover td { background: var(--surface2); }
           <div style="position:relative;height:200px"><canvas id="ch-on-cmp"></canvas></div>
         </div>
       </div>
-      <div class="panel mb"><div class="panel-title">Security cost premium per hour (SCUC − ED-UC, $)</div><div style="position:relative;height:150px"><canvas id="ch-delta"></canvas></div></div>
+      <div class="panel mb"><div class="panel-title">Security cost premium per hour (SCUC − ED-UC, ₹)</div><div style="position:relative;height:150px"><canvas id="ch-delta"></canvas></div></div>
       <div class="panel mb"><div class="panel-title">Generator dispatch difference: SCUC − ED-UC (MWh)</div><div style="position:relative;height:300px"><canvas id="ch-gen-cmp"></canvas></div></div>
     </div>
     <div id="tab-network" class="tab">
@@ -393,22 +390,22 @@ function downloadReport() {
   if (currentMode === 'ed' && R.ed) {
     const ed = R.ed;
     lines.push('── ECONOMIC DISPATCH ──────────────────────────────────────');
-    lines.push(`  Total Cost    : $${ed.total_cost.toLocaleString()}`);
-    lines.push(`  MCP           : $${ed.mcp}/MWh`);
+    lines.push(`  Total Cost    : ₹${ed.total_cost.toLocaleString()}`);
+    lines.push(`  MCP           : ₹${ed.mcp}/MWh`);
     lines.push(`  Total Demand  : ${ed.total_demand} MW`);
     lines.push(`  Solve Time    : ${ed.solve_time_s}s`);
     lines.push('');
     lines.push('  Generator Dispatch:');
-    lines.push('  ' + ['ID','Dispatch (MW)','Cost ($)','Status'].join('\t\t'));
+    lines.push('  ' + ['ID','Dispatch (MW)','Cost (₹)','Status'].join('\t\t'));
     ed.generators.forEach(g => {
-      lines.push('  ' + [`G${g.id}`, g.dispatch, `$${g.cost}`, g.marginal?'MARGINAL':'BASELOAD'].join('\t\t'));
+      lines.push('  ' + [`G${g.id}`, g.dispatch, `₹${g.cost}`, g.marginal?'MARGINAL':'BASELOAD'].join('\t\t'));
     });
   }
 
   if (currentMode === 'dcopf' && R.dcopf) {
     const dc = R.dcopf;
     lines.push('── DC-OPF ─────────────────────────────────────────────────');
-    lines.push(`  Total Cost    : $${dc.total_cost.toLocaleString()}`);
+    lines.push(`  Total Cost    : ₹${dc.total_cost.toLocaleString()}`);
     lines.push(`  Solve Time    : ${dc.solve_time_s}s`);
     lines.push(`  Lines Checked : ${dc.lines.length}`);
     lines.push(`  Congested     : ${dc.lines.filter(l=>l.loading_pct>=99).length}`);
@@ -424,20 +421,20 @@ function downloadReport() {
   if ((currentMode === 'educ' || currentMode === 'scuc') && R.educ) {
     const educ = R.educ;
     lines.push('── ED-UC ──────────────────────────────────────────────────');
-    lines.push(`  Total Cost    : $${educ.total_cost.toLocaleString()}`);
+    lines.push(`  Total Cost    : ₹${educ.total_cost.toLocaleString()}`);
     lines.push(`  Solve Time    : ${educ.solve_time_s}s`);
-    lines.push(`  Variable Cost : $${educ.cost_breakdown.variable_cost.toLocaleString()}`);
-    lines.push(`  No-Load Cost  : $${educ.cost_breakdown.noload_cost.toLocaleString()}`);
-    lines.push(`  Startup Cost  : $${educ.cost_breakdown.startup_cost.toLocaleString()}`);
+    lines.push(`  Variable Cost : ₹${educ.cost_breakdown.variable_cost.toLocaleString()}`);
+    lines.push(`  No-Load Cost  : ₹${educ.cost_breakdown.noload_cost.toLocaleString()}`);
+    lines.push(`  Startup Cost  : ₹${educ.cost_breakdown.startup_cost.toLocaleString()}`);
     lines.push('');
     lines.push('  Generator Summary:');
-    lines.push('  ' + ['Name','Hours ON','Startups','Total MWh','Total Cost ($)'].join('\t'));
+    lines.push('  ' + ['Name','Hours ON','Startups','Total MWh','Total Cost (₹)'].join('\t'));
     educ.generators.forEach(g => {
       lines.push('  ' + [g.name, g.hours_on, g.startups, g.total_mwh.toFixed(1), g.total_cost.toFixed(2)].join('\t'));
     });
     lines.push('');
     lines.push('  Hourly Summary:');
-    lines.push('  ' + ['Hour','Demand MW','Units ON','Lambda $/MWh','Cost $'].join('\t'));
+    lines.push('  ' + ['Hour','Demand MW','Units ON','Lambda ₹/MWh','Cost ₹'].join('\t'));
     educ.hourly.forEach(h => {
       lines.push('  ' + [h.hour, h.demand_mw, h.generators_on, h.lambda.toFixed(2), h.cost.toFixed(2)].join('\t'));
     });
@@ -447,10 +444,10 @@ function downloadReport() {
     const scuc = R.scuc;
     lines.push('');
     lines.push('── SCUC ───────────────────────────────────────────────────');
-    lines.push(`  Total Cost    : $${scuc.total_cost.toLocaleString()}`);
+    lines.push(`  Total Cost    : ₹${scuc.total_cost.toLocaleString()}`);
     lines.push(`  Solve Time    : ${scuc.solve_time_s}s`);
     if (R.comparison) {
-      lines.push(`  Security Premium : $${R.comparison.premium.toLocaleString()} (${R.comparison.premium_pct.toFixed(2)}%)`);
+      lines.push(`  Security Premium : ₹${R.comparison.premium.toLocaleString()} (${R.comparison.premium_pct.toFixed(2)}%)`);
     }
     if (scuc.lines && scuc.lines.length > 0) {
       lines.push('');
@@ -482,7 +479,7 @@ function downloadReport() {
 let R = null;
 let currentMode = 'ed';
 const GC = 'rgba(0,0,0,0.06)', TC = '#9aa0b0';
-const fmt$ = v => '$' + Math.round(v).toLocaleString();
+const fmt$ = v => '₹' + Math.round(v).toLocaleString();
 const PALETTE = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#84cc16','#ec4899','#14b8a6','#6366f1','#f43f5e','#22c55e','#eab308','#0ea5e9'];
 
 document.getElementById('lineFileRow').style.display = 'none';
@@ -575,9 +572,9 @@ function buildDashboard() {
       document.getElementById('stat-ed-metrics').innerHTML = metricHTML('ED Cost',fmt$(R.ed.total_cost),`Solved in ${R.ed.solve_time_s}s`,'green')+metricHTML('Market Clearing Price',fmt$(R.ed.mcp)+'/MWh','System marginal price','amber')+metricHTML('Total Demand',R.ed.total_demand+' MW','Base load met','blue');
       const labels=R.ed.generators.map(g=>`G${g.id}`);
       new Chart(document.getElementById('ch-ed-dispatch'),{type:'bar',data:{labels,datasets:[{data:R.ed.generators.map(g=>g.dispatch),backgroundColor:'#10b981',borderRadius:3}]},options:baseOpts('MW')});
-      new Chart(document.getElementById('ch-ed-cost'),{type:'bar',data:{labels,datasets:[{data:R.ed.generators.map(g=>g.cost),backgroundColor:'#f59e0b',borderRadius:3}]},options:baseOpts('$')});
-      let tEd=`<thead><tr><th>Generator ID</th><th class="num">Dispatch (MW)</th><th class="num">Cost ($)</th><th>Status</th></tr></thead><tbody>`;
-      R.ed.generators.forEach(g=>{tEd+=`<tr><td>G${g.id}</td><td class="num">${g.dispatch}</td><td class="num">$${g.cost}</td><td>${g.marginal?'<span class="badge badge-amber">MARGINAL</span>':'<span class="badge badge-green">BASELOAD</span>'}</td></tr>`;});
+      new Chart(document.getElementById('ch-ed-cost'),{type:'bar',data:{labels,datasets:[{data:R.ed.generators.map(g=>g.cost),backgroundColor:'#f59e0b',borderRadius:3}]},options:baseOpts('₹')});
+      let tEd=`<thead><tr><th>Generator ID</th><th class="num">Dispatch (MW)</th><th class="num">Cost (₹)</th><th>Status</th></tr></thead><tbody>`;
+      R.ed.generators.forEach(g=>{tEd+=`<tr><td>G${g.id}</td><td class="num">${g.dispatch}</td><td class="num">₹${g.cost}</td><td>${g.marginal?'<span class="badge badge-amber">MARGINAL</span>':'<span class="badge badge-green">BASELOAD</span>'}</td></tr>`;});
       document.getElementById('tbl-stat-ed').innerHTML=tEd+'</tbody>';
     }
   }
@@ -590,9 +587,9 @@ function buildDashboard() {
       document.getElementById('stat-ed-metrics').innerHTML=metricHTML('ED Cost',fmt$(R.ed.total_cost),'Unconstrained cost','green')+metricHTML('MCP',fmt$(R.ed.mcp)+'/MWh','System marginal price','amber');
       const labels=R.ed.generators.map(g=>`G${g.id}`);
       new Chart(document.getElementById('ch-ed-dispatch'),{type:'bar',data:{labels,datasets:[{data:R.ed.generators.map(g=>g.dispatch),backgroundColor:'#10b981',borderRadius:3}]},options:baseOpts('MW')});
-      new Chart(document.getElementById('ch-ed-cost'),{type:'bar',data:{labels,datasets:[{data:R.ed.generators.map(g=>g.cost),backgroundColor:'#f59e0b',borderRadius:3}]},options:baseOpts('$')});
-      let tEd=`<thead><tr><th>Gen ID</th><th class="num">Dispatch (MW)</th><th class="num">Cost ($)</th><th>Status</th></tr></thead><tbody>`;
-      R.ed.generators.forEach(g=>{tEd+=`<tr><td>G${g.id}</td><td class="num">${g.dispatch}</td><td class="num">${g.cost}</td><td>${g.marginal?'MARGINAL':'--'}</td></tr>`;});
+      new Chart(document.getElementById('ch-ed-cost'),{type:'bar',data:{labels,datasets:[{data:R.ed.generators.map(g=>g.cost),backgroundColor:'#f59e0b',borderRadius:3}]},options:baseOpts('₹')});
+      let tEd=`<thead><tr><th>Gen ID</th><th class="num">Dispatch (MW)</th><th class="num">Cost (₹)</th><th>Status</th></tr></thead><tbody>`;
+      R.ed.generators.forEach(g=>{tEd+=`<tr><td>G${g.id}</td><td class="num">${g.dispatch}</td><td class="num">₹${g.cost}</td><td>${g.marginal?'MARGINAL':'--'}</td></tr>`;});
       document.getElementById('tbl-stat-ed').innerHTML=tEd+'</tbody>';
     }
     if (R.dcopf) {
@@ -614,7 +611,7 @@ function buildDashboard() {
     showTab('tab-educ', document.getElementById('nav-educ'));
     const educ=R.educ, hours=educ.hourly.map(h=>h.hour), N_G=educ.generators.length;
     document.getElementById('educ-metrics').innerHTML=metricHTML('ED-UC Cost',fmt$(educ.total_cost),`Solved in ${educ.solve_time_s}s`,'green')+metricHTML('Peak units ON',Math.max(...educ.hourly.map(h=>h.generators_on))+' / '+N_G,'Active units','grey');
-    new Chart(document.getElementById('ch-educ-on'),{type:'bar',data:{labels:hours,datasets:[{data:educ.hourly.map(h=>h.generators_on),backgroundColor:'#10b98199',yAxisID:'y'},{type:'line',data:educ.hourly.map(h=>h.lambda),borderColor:'#f59e0b',tension:.3,yAxisID:'y2'}]},options:{...baseOpts(),scales:{y:{title:{display:true,text:'units ON'}},y2:{position:'right',title:{display:true,text:'$/MWh'}}}}});
+    new Chart(document.getElementById('ch-educ-on'),{type:'bar',data:{labels:hours,datasets:[{data:educ.hourly.map(h=>h.generators_on),backgroundColor:'#10b98199',yAxisID:'y'},{type:'line',data:educ.hourly.map(h=>h.lambda),borderColor:'#f59e0b',tension:.3,yAxisID:'y2'}]},options:{...baseOpts(),scales:{y:{title:{display:true,text:'units ON'}},y2:{position:'right',title:{display:true,text:'₹/MWh'}}}}});
     const stackDs=educ.generators.filter(g=>g.total_mwh>0).map((g,i)=>({label:g.name,data:g.dispatch,backgroundColor:PALETTE[i%PALETTE.length],stack:'stack'}));
     new Chart(document.getElementById('ch-educ-stack'),{type:'bar',data:{labels:hours,datasets:stackDs},options:{...baseOpts('MW'),scales:{x:{stacked:true},y:{stacked:true}}}});
     new Chart(document.getElementById('ch-educ-mwh'),{type:'bar',data:{labels:educ.generators.map(g=>g.name),datasets:[{data:educ.generators.map(g=>g.total_mwh),backgroundColor:educ.generators.map(g=>g.total_mwh>0?'#10b981bb':'#e5e7eb')}]},options:{indexAxis:'y',...baseOpts()}});
@@ -626,20 +623,20 @@ function buildDashboard() {
     showTab('tab-scuc', document.getElementById('nav-scuc'));
     const educ=R.educ, scuc=R.scuc, cmp=R.comparison, hours=educ.hourly.map(h=>h.hour), N_G=educ.generators.length;
     document.getElementById('scuc-metrics').innerHTML=metricHTML('SCUC Cost',fmt$(scuc.total_cost),`Solved in ${scuc.solve_time_s}s`,'blue')+metricHTML('Security Premium',fmt$(cmp.premium),`${cmp.premium_pct.toFixed(2)}% cost of N-1`,'amber');
-    new Chart(document.getElementById('ch-scuc-on'),{type:'bar',data:{labels:hours,datasets:[{data:scuc.hourly.map(h=>h.generators_on),backgroundColor:'#3b82f699',yAxisID:'y'},{type:'line',data:scuc.hourly.map(h=>h.lambda),borderColor:'#f59e0b',tension:.3,yAxisID:'y2'}]},options:{...baseOpts(),scales:{y:{title:{display:true,text:'units ON'}},y2:{position:'right',title:{display:true,text:'$/MWh'}}}}});
+    new Chart(document.getElementById('ch-scuc-on'),{type:'bar',data:{labels:hours,datasets:[{data:scuc.hourly.map(h=>h.generators_on),backgroundColor:'#3b82f699',yAxisID:'y'},{type:'line',data:scuc.hourly.map(h=>h.lambda),borderColor:'#f59e0b',tension:.3,yAxisID:'y2'}]},options:{...baseOpts(),scales:{y:{title:{display:true,text:'units ON'}},y2:{position:'right',title:{display:true,text:'₹/MWh'}}}}});
     const stackDsS=scuc.generators.filter(g=>g.total_mwh>0).map((g,i)=>({label:g.name,data:g.dispatch,backgroundColor:PALETTE[i%PALETTE.length],stack:'stack'}));
     new Chart(document.getElementById('ch-scuc-stack'),{type:'bar',data:{labels:hours,datasets:stackDsS},options:{...baseOpts('MW'),scales:{x:{stacked:true},y:{stacked:true}}}});
     new Chart(document.getElementById('ch-scuc-mwh'),{type:'bar',data:{labels:scuc.generators.map(g=>g.name),datasets:[{data:scuc.generators.map(g=>g.total_mwh),backgroundColor:scuc.generators.map(g=>g.total_mwh>0?'#3b82f6bb':'#e5e7eb')}]},options:{indexAxis:'y',...baseOpts()}});
     buildHeatmap('hm-scuc',scuc.generators,'#3b82f6');
     document.getElementById('educ-metrics').innerHTML=metricHTML('ED-UC Cost',fmt$(educ.total_cost),'Unconstrained cost','green');
-    new Chart(document.getElementById('ch-educ-on'),{type:'bar',data:{labels:hours,datasets:[{data:educ.hourly.map(h=>h.generators_on),backgroundColor:'#10b98199',yAxisID:'y'},{type:'line',data:educ.hourly.map(h=>h.lambda),borderColor:'#f59e0b',tension:.3,yAxisID:'y2'}]},options:{...baseOpts(),scales:{y:{title:{display:true,text:'units ON'}},y2:{position:'right',title:{display:true,text:'$/MWh'}}}}});
+    new Chart(document.getElementById('ch-educ-on'),{type:'bar',data:{labels:hours,datasets:[{data:educ.hourly.map(h=>h.generators_on),backgroundColor:'#10b98199',yAxisID:'y'},{type:'line',data:educ.hourly.map(h=>h.lambda),borderColor:'#f59e0b',tension:.3,yAxisID:'y2'}]},options:{...baseOpts(),scales:{y:{title:{display:true,text:'units ON'}},y2:{position:'right',title:{display:true,text:'₹/MWh'}}}}});
     const stackDsE=educ.generators.filter(g=>g.total_mwh>0).map((g,i)=>({label:g.name,data:g.dispatch,backgroundColor:PALETTE[i%PALETTE.length],stack:'stack'}));
     new Chart(document.getElementById('ch-educ-stack'),{type:'bar',data:{labels:hours,datasets:stackDsE},options:{...baseOpts('MW'),scales:{x:{stacked:true},y:{stacked:true}}}});
     new Chart(document.getElementById('ch-educ-mwh'),{type:'bar',data:{labels:educ.generators.map(g=>g.name),datasets:[{data:educ.generators.map(g=>g.total_mwh),backgroundColor:educ.generators.map(g=>g.total_mwh>0?'#10b981bb':'#e5e7eb')}]},options:{indexAxis:'y',...baseOpts()}});
     buildHeatmap('hm-educ',educ.generators,'#10b981');
     new Chart(document.getElementById('ch-demand'),{type:'line',data:{labels:hours,datasets:[{data:educ.hourly.map(h=>h.demand_mw),borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.08)',fill:true,tension:.35}]},options:baseOpts('MW')});
-    new Chart(document.getElementById('ch-hcost'),{type:'line',data:{labels:hours,datasets:[{data:educ.hourly.map(h=>h.cost),borderColor:'#10b981',fill:true,backgroundColor:'rgba(16,185,129,.07)',tension:.35},{data:scuc.hourly.map(h=>h.cost),borderColor:'#3b82f6',borderDash:[5,3],tension:.35}]},options:baseOpts('$/h')});
-    new Chart(document.getElementById('ch-delta'),{type:'bar',data:{labels:hours,datasets:[{data:cmp.hourly_delta.map(h=>h.delta),backgroundColor:cmp.hourly_delta.map(h=>h.delta>=0?'rgba(59,130,246,.55)':'rgba(16,185,129,.55)')}]},options:baseOpts('$ diff')});
+    new Chart(document.getElementById('ch-hcost'),{type:'line',data:{labels:hours,datasets:[{data:educ.hourly.map(h=>h.cost),borderColor:'#10b981',fill:true,backgroundColor:'rgba(16,185,129,.07)',tension:.35},{data:scuc.hourly.map(h=>h.cost),borderColor:'#3b82f6',borderDash:[5,3],tension:.35}]},options:baseOpts('₹/h')});
+    new Chart(document.getElementById('ch-delta'),{type:'bar',data:{labels:hours,datasets:[{data:cmp.hourly_delta.map(h=>h.delta),backgroundColor:cmp.hourly_delta.map(h=>h.delta>=0?'rgba(59,130,246,.55)':'rgba(16,185,129,.55)')}]},options:baseOpts('₹ diff')});
     new Chart(document.getElementById('ch-on-cmp'),{type:'bar',data:{labels:hours,datasets:[{label:'ED-UC',data:educ.hourly.map(h=>h.generators_on),backgroundColor:'rgba(16,185,129,.65)'},{label:'SCUC',data:scuc.hourly.map(h=>h.generators_on),backgroundColor:'rgba(59,130,246,.55)'}]},options:baseOpts()});
     const diffMwh=educ.generators.map((g,i)=>Math.round((scuc.generators[i].total_mwh-g.total_mwh)*100)/100);
     new Chart(document.getElementById('ch-gen-cmp'),{type:'bar',data:{labels:educ.generators.map(g=>g.name),datasets:[{data:diffMwh,backgroundColor:diffMwh.map(v=>v>0?'rgba(59,130,246,.65)':v<0?'rgba(16,185,129,.65)':'#e5e7eb')}]},options:{indexAxis:'y',...baseOpts()}});
